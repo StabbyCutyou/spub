@@ -2,7 +2,7 @@
 [![GoDoc](http://img.shields.io/badge/go-documentation-blue.svg?style=flat-square)](http://godoc.org/github.com/StabbyCutyou/spub)
 
 # What is Spub?
-Spub is a simple, channel-based asynchronous broadcast channel publishing wrapper.
+Spub is a simple, channel-based asynchronous broadcast publishing wrapper.
 
 With Spub, you can send once and have any number of receivers get a copy of the data.
 
