@@ -74,13 +74,13 @@ func (m *Mux) SendTo(b []byte, id string) {
 	m.mu.Lock()
 	l, ok := m.listeners[id]
 	m.mu.Unlock()
-	go func(il *Listener) {
+	go func() {
 		if !ok {
-			m.err <- ErrUnknownListener{Data: b, ListenerID: il.ID}
+			m.err <- ErrUnknownListener{Data: b, ListenerID: l.ID}
 			return
 		}
-		m.sendto(b, il)
-	}(&l)
+		m.sendto(b, &l)
+	}()
 }
 
 // Send will produce a message to the listeners. Check Err() for errors
@@ -131,6 +131,21 @@ func (m *Mux) Close() {
 		close(l.C)
 	}
 	m.mu.Unlock()
+}
+
+// RemoveListener is to turn a listener off and close it's channel
+func (m *Mux) RemoveListener(id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	l, ok := m.listeners[id]
+	if !ok {
+		return ErrUnknownListener{ListenerID: id}
+	}
+	if !l.Closed() {
+		l.Close()
+	}
+	delete(m.listeners, id)
+	return nil
 }
 
 // Err returns a channel that emits errors
