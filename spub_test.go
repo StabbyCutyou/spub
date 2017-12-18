@@ -43,7 +43,7 @@ func BenchmarkSpub(b *testing.B) {
 		b.Run(c.name, func(b *testing.B) {
 			errC := 0
 			messC := 0
-			m := spub.New(make(chan error), time.Millisecond*1)
+			m := spub.New(time.Millisecond * 1)
 			go func() {
 				for range m.Err() {
 					errC++
