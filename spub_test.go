@@ -43,9 +43,9 @@ func BenchmarkSpub(b *testing.B) {
 		b.Run(c.name, func(b *testing.B) {
 			errC := 0
 			messC := 0
-			m := spub.New(time.Millisecond * 1)
+			p := spub.New(time.Millisecond * 1)
 			go func() {
-				for range m.Err() {
+				for range p.Err() {
 					errC++
 					if errC%10000 == 0 {
 						fmt.Printf("aaa------------------- %d ----------------------\n", errC)
@@ -66,13 +66,13 @@ func BenchmarkSpub(b *testing.B) {
 				listeners[i].C = c
 			}
 			for i := 0; i < b.N; i++ {
-				m.Send(c.data)
+				p.Send(c.data)
 			}
-			m.Close()
+			p.Close()
 			done := false
 			for !done {
 				select {
-				case err := <-m.Err():
+				case err := <-p.Err():
 					b.Error(err)
 				default:
 					done = true

@@ -30,8 +30,8 @@ func (l *Listener) Closed() bool {
 	}
 }
 
-// Mux registers listeners and produces errors
-type Mux struct {
+// Pub registers listeners and produces errors
+type Pub struct {
 	mu             sync.Mutex
 	listeners      map[string]Listener
 	err            chan error
@@ -39,9 +39,9 @@ type Mux struct {
 	quit           chan struct{}
 }
 
-// New returns a new mux
-func New(d time.Duration) *Mux {
-	return &Mux{
+// New returns a new Pub
+func New(d time.Duration) *Pub {
+	return &Pub{
 		err:            make(chan error),
 		defaultTimeout: d,
 		quit:           make(chan struct{}),
@@ -49,7 +49,7 @@ func New(d time.Duration) *Mux {
 }
 
 // Register will register a listener
-func (m *Mux) Register(l Listener) error {
+func (p *Pub) Register(l Listener) error {
 	if l.ID == "" {
 		return ErrListenerWithoutID{}
 	}
@@ -57,44 +57,44 @@ func (m *Mux) Register(l Listener) error {
 		l.C = make(chan []byte)
 	}
 	if l.Timeout == 0 {
-		l.Timeout = m.defaultTimeout
+		l.Timeout = p.defaultTimeout
 	}
 	l.quit = make(chan struct{})
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if _, ok := m.listeners[l.ID]; ok {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if _, ok := p.listeners[l.ID]; ok {
 		return ErrDuplicateListenerID{ListenerID: l.ID}
 	}
-	m.listeners[l.ID] = l
+	p.listeners[l.ID] = l
 	return nil
 }
 
 // SendTo allows you to send to just 1 specific listener, good for retrying failures
-func (m *Mux) SendTo(b []byte, id string) {
-	m.mu.Lock()
-	l, ok := m.listeners[id]
-	m.mu.Unlock()
+func (p *Pub) SendTo(b []byte, id string) {
+	p.mu.Lock()
+	l, ok := p.listeners[id]
+	p.mu.Unlock()
 	go func() {
 		if !ok {
-			m.err <- ErrUnknownListener{Data: b, ListenerID: l.ID}
+			p.err <- ErrUnknownListener{Data: b, ListenerID: l.ID}
 			return
 		}
-		m.sendto(b, &l)
+		p.sendto(b, &l)
 	}()
 }
 
 // Send will produce a message to the listeners. Check Err() for errors
-func (m *Mux) Send(b []byte) {
+func (p *Pub) Send(b []byte) {
 	// For the range of listeners
-	m.mu.Lock()
-	for _, l := range m.listeners {
+	p.mu.Lock()
+	for _, l := range p.listeners {
 		// Fire off a goroutine
-		go m.sendto(b, &l)
+		go p.sendto(b, &l)
 	}
-	m.mu.Unlock()
+	p.mu.Unlock()
 }
 
-func (m *Mux) sendto(b []byte, l *Listener) {
+func (p *Pub) sendto(b []byte, l *Listener) {
 	ctx, cncl := context.WithTimeout(context.Background(), l.Timeout)
 	defer cncl()
 	defer func() {
@@ -106,49 +106,49 @@ func (m *Mux) sendto(b []byte, l *Listener) {
 		// Since this is an edge case on shutdown only, and we can give them
 		// the data back, this is ok for now
 		if err := recover(); err != nil {
-			m.err <- ErrShuttingDown{Data: b, ListenerID: l.ID}
+			p.err <- ErrShuttingDown{Data: b, ListenerID: l.ID}
 		}
 	}()
 	// Now send on the listener, hit the deadline, or bail on a closed mux
 	select {
-	case <-m.quit:
-		m.err <- ErrShuttingDown{Data: b, ListenerID: l.ID}
+	case <-p.quit:
+		p.err <- ErrShuttingDown{Data: b, ListenerID: l.ID}
 	case <-ctx.Done(): // If timeout, error
-		m.err <- ErrPublishDeadline{Err: ctx.Err(), Data: b, ListenerID: l.ID}
+		p.err <- ErrPublishDeadline{Err: ctx.Err(), Data: b, ListenerID: l.ID}
 	case l.C <- b: // if it sent, we're done
 	}
 }
 
 // Close closes the mux after draining the listeners?
-func (m *Mux) Close() {
-	close(m.quit)
-	m.mu.Lock()
-	for _, l := range m.listeners {
+func (p *Pub) Close() {
+	close(p.quit)
+	p.mu.Lock()
+	for _, l := range p.listeners {
 		// If we try to get clever and close inside of the Send select on quit
 		// we can run into cases where the channel never gets closed due to the
 		// timing of the scheduler
 		l.Close()
 		close(l.C)
 	}
-	m.mu.Unlock()
+	p.mu.Unlock()
 }
 
 // RemoveListener is to turn a listener off and close it's channel
-func (m *Mux) RemoveListener(id string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	l, ok := m.listeners[id]
+func (p *Pub) RemoveListener(id string) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	l, ok := p.listeners[id]
 	if !ok {
 		return ErrUnknownListener{ListenerID: id}
 	}
 	if !l.Closed() {
 		l.Close()
 	}
-	delete(m.listeners, id)
+	delete(p.listeners, id)
 	return nil
 }
 
 // Err returns a channel that emits errors
-func (m *Mux) Err() chan error {
-	return m.err
+func (p *Pub) Err() chan error {
+	return p.err
 }
