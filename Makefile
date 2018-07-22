@@ -21,3 +21,6 @@ bench:
 
 benchmem:
 	go test -v -benchmem -bench=. 
+
+count:
+	grep -v "//" spub.go | grep . | wc -l

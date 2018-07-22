@@ -15,8 +15,9 @@ func (e ErrPublishDeadline) Error() string {
 
 // ErrShuttingDown is returned when the message cannot be published due to shutdown
 type ErrShuttingDown struct {
-	Data       []byte
-	ListenerID string
+	Data          []byte
+	ListenerID    string
+	FullBroadcast bool
 }
 
 func (e ErrShuttingDown) Error() string {

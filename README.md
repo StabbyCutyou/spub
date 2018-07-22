@@ -49,7 +49,7 @@ if err := p.Register(l); err != nil {
 Now, you can begin to Send to the Listeners. Note that any erros from Send or SendTo will always be reported via the Err() channel, never synchronously. Both Send and SendTo are meant to behave in an asynchronous, non-blocking manner.
 
 ```go
-p.Send([]byte("some really important data"))
+p.Broadcast([]byte("some really cool data"))
 ```
 
 If you receive any errors in your Error handler, you can use this method to attempt to retry:

@@ -19,7 +19,7 @@ func main() {
 		l := spub.Listener{
 			C: make(chan []byte),
 		}
-		p.Register(l)
+		p.Subscribe(l)
 		go func(il *spub.Listener) {
 			for range il.C {
 			}
@@ -27,8 +27,8 @@ func main() {
 		}(&l) // pop off endlessly
 	}
 	for i := 0; i < 100000; i++ {
-		p.Send(make([]byte, 0))
+		p.Broadcast(make([]byte, 0))
 	}
-	p.Close()
+	p.Stop()
 	wg.Wait()
 }

@@ -66,9 +66,9 @@ func BenchmarkSpub(b *testing.B) {
 				listeners[i].C = c
 			}
 			for i := 0; i < b.N; i++ {
-				p.Send(c.data)
+				p.Broadcast(c.data)
 			}
-			p.Close()
+			p.Stop()
 			done := false
 			for !done {
 				select {
