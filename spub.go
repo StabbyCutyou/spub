@@ -17,8 +17,9 @@ type Listener struct {
 
 // Pub registers listeners and produces errors
 type Pub struct {
-	mu             sync.Mutex
-	listeners      map[string]Listener
+	mu        sync.Mutex
+	listeners map[string]Listener
+
 	err            chan error
 	defaultTimeout time.Duration
 	quit           chan struct{}
@@ -27,6 +28,7 @@ type Pub struct {
 // New returns a new Pub
 func New(d time.Duration) *Pub {
 	return &Pub{
+		listeners:      make(map[string]Listener),
 		err:            make(chan error),
 		defaultTimeout: d,
 		quit:           make(chan struct{}),
@@ -78,7 +80,8 @@ func (p *Pub) Broadcast(b []byte) {
 	p.mu.Lock()
 	for _, l := range p.listeners {
 		// Fire off a goroutine
-		go p.sendto(b, &l)
+		lx := l // Need to make a local copy, or else we run into closure conundrums
+		go p.sendto(b, &lx)
 	}
 	p.mu.Unlock()
 }
@@ -86,7 +89,7 @@ func (p *Pub) Broadcast(b []byte) {
 func (p *Pub) sendto(b []byte, l *Listener) {
 	ctx, cncl := context.WithTimeout(context.Background(), l.Timeout)
 	defer cncl()
-	/*defer func() {
+	defer func() {
 		// TODO find a way around the panic on closed send
 		// Can't find a way to signal to callers the listener is closed
 		// so they can break out of a loop without compromising the fact
@@ -97,7 +100,7 @@ func (p *Pub) sendto(b []byte, l *Listener) {
 		if err := recover(); err != nil {
 			p.err <- ErrShuttingDown{Data: b, ListenerID: l.ID}
 		}
-	}()*/
+	}()
 	// Now send on the listener, hit the deadline, or bail on a closed mux
 	select {
 	case <-p.quit:

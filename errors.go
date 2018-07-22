@@ -2,11 +2,23 @@ package spub
 
 import "fmt"
 
+// Returned when there is no listener id, like during a specific publish / broadcast error
+const NoListenerID = "-1"
+
+type HasListener interface {
+	ID() string
+}
+
 // ErrPublishDeadline is returned when the message cannot be published due to timeout
 type ErrPublishDeadline struct {
 	Err        error
 	Data       []byte
 	ListenerID string
+}
+
+// ID returns the listener id
+func (e ErrPublishDeadline) ID() string {
+	return e.ListenerID
 }
 
 func (e ErrPublishDeadline) Error() string {
@@ -18,6 +30,14 @@ type ErrShuttingDown struct {
 	Data          []byte
 	ListenerID    string
 	FullBroadcast bool
+}
+
+// ID returns the
+func (e ErrShuttingDown) ID() string {
+	if e.FullBroadcast {
+		return "-1"
+	}
+	return e.ListenerID
 }
 
 func (e ErrShuttingDown) Error() string {
