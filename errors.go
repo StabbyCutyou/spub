@@ -2,11 +2,40 @@ package spub
 
 import "fmt"
 
+// NoSubscriberID is returned when there is no subscriber id, like during a specific publish / broadcast error
+const NoSubscriberID = "-1"
+
+// HasSubscriber represents an error with a SubscriberID
+type HasSubscriber interface {
+	ID() string
+}
+
+// HasMessage represents an error with a Data payload
+type HasMessage interface {
+	Message() []byte
+}
+
+// HasSubscriberAndMessage represents an error with both a SubscriberID and a Data payload
+type HasSubscriberAndMessage interface {
+	HasSubscriber
+	HasMessage
+}
+
 // ErrPublishDeadline is returned when the message cannot be published due to timeout
 type ErrPublishDeadline struct {
-	Err        error
-	Data       []byte
-	ListenerID string
+	Err          error
+	Data         []byte
+	SubscriberID string
+}
+
+// ID returns the Subscriber id
+func (e ErrPublishDeadline) ID() string {
+	return e.SubscriberID
+}
+
+// Message returns a data payload
+func (e ErrPublishDeadline) Message() []byte {
+	return e.Data
 }
 
 func (e ErrPublishDeadline) Error() string {
@@ -15,38 +44,72 @@ func (e ErrPublishDeadline) Error() string {
 
 // ErrShuttingDown is returned when the message cannot be published due to shutdown
 type ErrShuttingDown struct {
-	Data       []byte
-	ListenerID string
+	Data          []byte
+	SubscriberID  string
+	FullBroadcast bool
+}
+
+// ID returns the
+func (e ErrShuttingDown) ID() string {
+	if e.FullBroadcast {
+		return "-1"
+	}
+	return e.SubscriberID
+}
+
+// Message returns a data payload
+func (e ErrShuttingDown) Message() []byte {
+	return e.Data
 }
 
 func (e ErrShuttingDown) Error() string {
 	return "error publishing data, shutting down"
 }
 
-// ErrDuplicateListenerID is returned when you register conflicting listener ids
-type ErrDuplicateListenerID struct {
-	ListenerID string
+// ErrDuplicateSubscriberID is returned when you register conflicting Subscriber ids
+type ErrDuplicateSubscriberID struct {
+	SubscriberID string
 }
 
-func (e ErrDuplicateListenerID) Error() string {
-	return fmt.Sprintf("error registering listener, duplicate listener ID: %s", e.ListenerID)
+// ID returns the Subscriber id
+func (e ErrDuplicateSubscriberID) ID() string {
+	return e.SubscriberID
 }
 
-// ErrListenerWithoutID is returned when you register a listener without an ID
-type ErrListenerWithoutID struct {
-	ListenerID string
+func (e ErrDuplicateSubscriberID) Error() string {
+	return fmt.Sprintf("error registering Subscriber, duplicate Subscriber ID: %s", e.SubscriberID)
 }
 
-func (e ErrListenerWithoutID) Error() string {
-	return "error registering listener, you must provide a unique ID when registering a listener"
+// ErrSubscriberWithoutID is returned when you register a Subscriber without an ID
+type ErrSubscriberWithoutID struct {
+	SubscriberID string
 }
 
-// ErrUnknownListener is returned when the message cannot be published due to a listener being unknown by ID
-type ErrUnknownListener struct {
-	Data       []byte
-	ListenerID string
+// ID returns the Subscriber id
+func (e ErrSubscriberWithoutID) ID() string {
+	return e.SubscriberID
 }
 
-func (e ErrUnknownListener) Error() string {
-	return fmt.Sprintf("error registering listener, unknown listener ID: %s", e.ListenerID)
+func (e ErrSubscriberWithoutID) Error() string {
+	return "error registering Subscriber, you must provide a unique ID when registering a Subscriber"
+}
+
+// ErrUnknownSubscriber is returned when the message cannot be published due to a Subscriber being unknown by ID
+type ErrUnknownSubscriber struct {
+	Data         []byte
+	SubscriberID string
+}
+
+// ID returns the Subscriber id
+func (e ErrUnknownSubscriber) ID() string {
+	return e.SubscriberID
+}
+
+// Message returns a data payload
+func (e ErrUnknownSubscriber) Message() []byte {
+	return e.Data
+}
+
+func (e ErrUnknownSubscriber) Error() string {
+	return fmt.Sprintf("error registering Subscriber, unknown Subscriber ID: %s", e.SubscriberID)
 }
