@@ -76,6 +76,10 @@ func main() {
 	fmt.Println("errors:")
 	for k, v := range errReasons {
 		fmt.Printf("Subscriber: %s\n", k)
+		if len(v) == 0 {
+			fmt.Println("\tNo errors")
+			continue
+		}
 		for err, count := range v {
 			fmt.Printf("\t%s : %d\n", err, count)
 		}
