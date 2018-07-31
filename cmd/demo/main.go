@@ -17,14 +17,14 @@ func main() {
 	p := spub.New(time.Millisecond * 1)
 	// We'll use this to block on shutdown near the end
 	wg := sync.WaitGroup{}
-	// Dynamically control the number of listeners to demonstrate parallelism
-	numListeners := 3
-	wg.Add(numListeners)
+	// Dynamically control the number of subscribers to demonstrate parallelism
+	numSubscribers := 3
+	wg.Add(numSubscribers)
 	// Track why errors happen and for whom
-	// -1 means it was not applicable to a listener directly
+	// -1 means it was not applicable to a subscriber directly
 	errReasons := make(map[string]map[string]int)
 	errReasons["-1"] = make(map[string]int)
-	for i := 0; i < numListeners; i++ {
+	for i := 0; i < numSubscribers; i++ {
 		// Seed the reason tracker
 		errReasons[strconv.Itoa(i)] = make(map[string]int)
 	}
@@ -32,7 +32,7 @@ func main() {
 	go func() {
 		for err := range p.Err() {
 			switch x := err.(type) {
-			case spub.HasListener:
+			case spub.HasSubscriber:
 				m := errReasons[x.ID()]
 				i, ok := m[err.Error()]
 				if !ok {
@@ -43,16 +43,16 @@ func main() {
 			}
 		}
 	}()
-	for i := 0; i < numListeners; i++ {
+	for i := 0; i < numSubscribers; i++ {
 		// Make a new listener
-		l := spub.Listener{
+		l := spub.Subscriber{
 			ID: strconv.Itoa(i),
 			C:  make(chan []byte),
 		}
 		// Subscribe to the feed
 		p.Subscribe(l)
 		// Fire off a go routine to drain the listeners and keep count
-		go drainListener(&l, &wg)
+		go drainSubscriber(&l, &wg)
 	}
 	// Send off 100k messages. Recall that Broadcast spawns 1 go routine per listener
 	// when sending messages
@@ -75,14 +75,14 @@ func main() {
 	}
 	fmt.Println("errors:")
 	for k, v := range errReasons {
-		fmt.Printf("Listener: %s\n", k)
+		fmt.Printf("Subscriber: %s\n", k)
 		for err, count := range v {
 			fmt.Printf("\t%s : %d\n", err, count)
 		}
 	}
 }
 
-func drainListener(il *spub.Listener, wg *sync.WaitGroup) {
+func drainSubscriber(il *spub.Subscriber, wg *sync.WaitGroup) {
 	x := 0
 	for range il.C {
 		x++

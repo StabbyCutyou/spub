@@ -7,28 +7,29 @@ import (
 	"time"
 )
 
-// Listener is a channel to receive bytes from and a context for cancellation
-type Listener struct {
+// Subscriber wraps a channel to receive bytes from
+type Subscriber struct {
 	ID      string
 	C       chan []byte
 	Timeout time.Duration
 	quit    chan struct{}
 }
 
-// Pub registers listeners and produces errors
-type Pub struct {
-	mu        sync.Mutex
-	listeners map[string]Listener
+// Publisher registers a Subscriber and produces errors
+type Publisher struct {
+	// Nice little mutex 👒
+	mu          sync.Mutex
+	subscribers map[string]Subscriber
 
 	err            chan error
 	defaultTimeout time.Duration
 	quit           chan struct{}
 }
 
-// New returns a new Pub
-func New(d time.Duration) *Pub {
-	return &Pub{
-		listeners:      make(map[string]Listener),
+// New returns a new Publisher
+func New(d time.Duration) *Publisher {
+	return &Publisher{
+		subscribers:    make(map[string]Subscriber),
 		err:            make(chan error),
 		defaultTimeout: d,
 		quit:           make(chan struct{}),
@@ -36,58 +37,59 @@ func New(d time.Duration) *Pub {
 }
 
 // Subscribe will register a listener
-func (p *Pub) Subscribe(l Listener) error {
-	if l.ID == "" {
-		return ErrListenerWithoutID{}
+func (p *Publisher) Subscribe(s Subscriber) error {
+	if s.ID == "" {
+		return ErrSubscriberWithoutID{}
 	}
-	if l.C == nil {
-		l.C = make(chan []byte)
+	if s.C == nil {
+		s.C = make(chan []byte)
 	}
-	if l.Timeout == 0 {
-		l.Timeout = p.defaultTimeout
+	if s.Timeout == 0 {
+		s.Timeout = p.defaultTimeout
 	}
-	l.quit = make(chan struct{})
+	s.quit = make(chan struct{})
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if _, ok := p.listeners[l.ID]; ok {
-		return ErrDuplicateListenerID{ListenerID: l.ID}
+	if _, ok := p.subscribers[s.ID]; ok {
+		return ErrDuplicateSubscriberID{SubscriberID: s.ID}
 	}
-	p.listeners[l.ID] = l
+	p.subscribers[s.ID] = s
 	return nil
 }
 
 // SendTo allows you to send to just 1 specific listener, good for retrying failures
-func (p *Pub) SendTo(b []byte, id string) {
+func (p *Publisher) SendTo(b []byte, id string) {
 	if p.Stopped() {
-		go func() { p.err <- ErrShuttingDown{Data: b, ListenerID: id} }()
+		go func() { p.err <- ErrShuttingDown{Data: b, SubscriberID: id} }()
 	}
 	p.mu.Lock()
-	l, ok := p.listeners[id]
+	l, ok := p.subscribers[id]
 	p.mu.Unlock()
 	if !ok {
-		p.err <- ErrUnknownListener{Data: b, ListenerID: l.ID}
+		p.err <- ErrUnknownSubscriber{Data: b, SubscriberID: l.ID}
 		return
 	}
 	go p.sendto(b, &l)
 }
 
 // Broadcast will produce a message to the listeners. Check Err() for errors
-func (p *Pub) Broadcast(b []byte) {
+func (p *Publisher) Broadcast(b []byte) {
 	if p.Stopped() {
 		go func() { p.err <- ErrShuttingDown{Data: b, FullBroadcast: true} }()
 	}
 	// For the range of listeners
 	p.mu.Lock()
-	for _, l := range p.listeners {
+	for _, l := range p.subscribers {
 		// Fire off a goroutine
-		lx := l // Need to make a local copy, or else we run into closure conundrums
+		// Need to make a local copy, or else we run into closure conundrums
+		lx := l
 		go p.sendto(b, &lx)
 	}
 	p.mu.Unlock()
 }
 
-func (p *Pub) sendto(b []byte, l *Listener) {
-	ctx, cncl := context.WithTimeout(context.Background(), l.Timeout)
+func (p *Publisher) sendto(b []byte, s *Subscriber) {
+	ctx, cncl := context.WithTimeout(context.Background(), s.Timeout)
 	defer cncl()
 	defer func() {
 		// TODO find a way around the panic on closed send
@@ -98,24 +100,24 @@ func (p *Pub) sendto(b []byte, l *Listener) {
 		// Since this is an edge case on shutdown only, and we can give them
 		// the data back, this is ok for now
 		if err := recover(); err != nil {
-			p.err <- ErrShuttingDown{Data: b, ListenerID: l.ID}
+			p.err <- ErrShuttingDown{Data: b, SubscriberID: s.ID}
 		}
 	}()
 	// Now send on the listener, hit the deadline, or bail on a closed mux
 	select {
 	case <-p.quit:
-		p.err <- ErrShuttingDown{Data: b, ListenerID: l.ID}
+		p.err <- ErrShuttingDown{Data: b, SubscriberID: s.ID}
 	case <-ctx.Done(): // If timeout, error
-		p.err <- ErrPublishDeadline{Err: ctx.Err(), Data: b, ListenerID: l.ID}
-	case l.C <- b: // if it sent, we're done
+		p.err <- ErrPublishDeadline{Err: ctx.Err(), Data: b, SubscriberID: s.ID}
+	case s.C <- b: // if it sent, we're done
 	}
 }
 
-// Stop closes the mux after stopping the listeners
-func (p *Pub) Stop() {
+// Stop closes the mux after stopping the subscribers
+func (p *Publisher) Stop() {
 	close(p.quit)
 	p.mu.Lock()
-	for _, l := range p.listeners {
+	for _, l := range p.subscribers {
 		// If we try to get clever and close inside of Sends select on quit
 		// we can run into cases where the channel never gets closed due to the
 		// timing of the scheduler
@@ -126,7 +128,7 @@ func (p *Pub) Stop() {
 }
 
 // Stopped returns whether or not the publisher has been stopped
-func (p *Pub) Stopped() bool {
+func (p *Publisher) Stopped() bool {
 	select {
 	case <-p.quit:
 		return true
@@ -136,21 +138,21 @@ func (p *Pub) Stopped() bool {
 }
 
 // Unsubscribe will turn a listener off and close it's channels
-func (p *Pub) Unsubscribe(id string) error {
+func (p *Publisher) Unsubscribe(id string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	l, ok := p.listeners[id]
+	l, ok := p.subscribers[id]
 	if !ok {
-		return ErrUnknownListener{ListenerID: id}
+		return ErrUnknownSubscriber{SubscriberID: id}
 	}
 	close(l.quit)
 	close(l.C)
-	delete(p.listeners, id)
+	delete(p.subscribers, id)
 	return nil
 }
 
 // Err returns a channel that emits errors
 // This channel never closes
-func (p *Pub) Err() <-chan error {
+func (p *Publisher) Err() <-chan error {
 	return p.err
 }
