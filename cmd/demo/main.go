@@ -14,7 +14,7 @@ func main() {
 	// Depending on how big of a mailbox you give your listeners,
 	// and how busy your publishers are, this number becomes very
 	// important to avoid bleeding messages through Err()
-	p := spub.New(time.Minute * 1)
+	p := spub.New(time.Millisecond * 1)
 	// We'll use this to block on shutdown near the end
 	wg := sync.WaitGroup{}
 	// Dynamically control the number of listeners to demonstrate parallelism
@@ -73,7 +73,13 @@ func main() {
 		// Let it drain - it will never close, but it will hit zero once stop is called
 		time.Sleep(1 * time.Second)
 	}
-	fmt.Printf("errors:\n%+v\n", errReasons)
+	fmt.Println("errors:")
+	for k, v := range errReasons {
+		fmt.Printf("Listener: %s\n", k)
+		for err, count := range v {
+			fmt.Printf("\t%s : %d\n", err, count)
+		}
+	}
 }
 
 func drainListener(il *spub.Listener, wg *sync.WaitGroup) {
