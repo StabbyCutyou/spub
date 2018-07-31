@@ -1,4 +1,4 @@
-// Package spub has some pub sub stuff
+// Package spub has some pub sub stuff, so please enjoy it
 package spub
 
 import (
@@ -36,7 +36,7 @@ func New(d time.Duration) *Publisher {
 	}
 }
 
-// Subscribe will register a listener
+// Subscribe will register a subscriber
 func (p *Publisher) Subscribe(s Subscriber) error {
 	if s.ID == "" {
 		return ErrSubscriberWithoutID{}
@@ -57,7 +57,7 @@ func (p *Publisher) Subscribe(s Subscriber) error {
 	return nil
 }
 
-// SendTo allows you to send to just 1 specific listener, good for retrying failures
+// SendTo allows you to send to just 1 specific subscriber, good for retrying failures
 func (p *Publisher) SendTo(b []byte, id string) {
 	if p.Stopped() {
 		go func() { p.err <- ErrShuttingDown{Data: b, SubscriberID: id} }()
@@ -72,12 +72,12 @@ func (p *Publisher) SendTo(b []byte, id string) {
 	go p.sendto(b, &l)
 }
 
-// Broadcast will produce a message to the listeners. Check Err() for errors
+// Broadcast will produce a message to the subscribers. Check Err() for errors
 func (p *Publisher) Broadcast(b []byte) {
 	if p.Stopped() {
 		go func() { p.err <- ErrShuttingDown{Data: b, FullBroadcast: true} }()
 	}
-	// For the range of listeners
+	// For the range of subscribers
 	p.mu.Lock()
 	for _, l := range p.subscribers {
 		// Fire off a goroutine
@@ -93,7 +93,7 @@ func (p *Publisher) sendto(b []byte, s *Subscriber) {
 	defer cncl()
 	defer func() {
 		// TODO find a way around the panic on closed send
-		// Can't find a way to signal to callers the listener is closed
+		// Can't find a way to signal to callers the subscriber is closed
 		// so they can break out of a loop without compromising the fact
 		// multiple go-routines might be trying to write to it
 		// other than removing concurrency from send, but i'd prefer not
@@ -103,7 +103,7 @@ func (p *Publisher) sendto(b []byte, s *Subscriber) {
 			p.err <- ErrShuttingDown{Data: b, SubscriberID: s.ID}
 		}
 	}()
-	// Now send on the listener, hit the deadline, or bail on a closed mux
+	// Now send on the subscriber, hit the deadline, or bail on a closed Publisher
 	select {
 	case <-p.quit:
 		p.err <- ErrShuttingDown{Data: b, SubscriberID: s.ID}
@@ -113,7 +113,7 @@ func (p *Publisher) sendto(b []byte, s *Subscriber) {
 	}
 }
 
-// Stop closes the mux after stopping the subscribers
+// Stop closes the Publisher after stopping the subscribers
 func (p *Publisher) Stop() {
 	close(p.quit)
 	p.mu.Lock()
@@ -137,7 +137,7 @@ func (p *Publisher) Stopped() bool {
 	}
 }
 
-// Unsubscribe will turn a listener off and close it's channels
+// Unsubscribe will turn a subscriber off and close it's channels
 func (p *Publisher) Unsubscribe(id string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
