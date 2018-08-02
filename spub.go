@@ -82,8 +82,8 @@ func (p *Publisher) Broadcast(b []byte) {
 	for _, l := range p.subscribers {
 		// Fire off a goroutine
 		// Need to make a local copy, or else we run into closure conundrums
-		lx := l
-		go p.sendto(b, &lx)
+		//lx := l
+		go p.sendto(b, &l)
 	}
 	p.mu.Unlock()
 }

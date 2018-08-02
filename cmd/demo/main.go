@@ -14,7 +14,7 @@ func main() {
 	// Depending on how big of a mailbox you give your listeners,
 	// and how busy your publishers are, this number becomes very
 	// important to avoid bleeding messages through Err()
-	p := spub.New(time.Millisecond * 1)
+	p := spub.New(time.Second * 10)
 	// We'll use this to block on shutdown near the end
 	wg := sync.WaitGroup{}
 	// Dynamically control the number of subscribers to demonstrate parallelism
